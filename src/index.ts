@@ -13,6 +13,7 @@ export type SynchraBridgeEvent =
   | "app.qr.scan"
   | "app.s3.image.get"
   | "app.s3.file.get"
+  | "app.navigation.open"
   | "app.snackbar.show"
   | "app.modal.open"
   | "app.provider.context"
@@ -23,6 +24,12 @@ export type SynchraThemeVariant = "light" | "dark";
 export type SynchraSnackbarType = "warn" | "error" | "success" | "empty";
 export type SynchraModalAction = "primary" | "secondary" | "dismiss";
 export type SynchraS3ResponseType = "local_uri" | "base64";
+export type SynchraNavigationAction =
+  | "navigate"
+  | "push"
+  | "replace"
+  | "go_back"
+  | "pop_to_top";
 
 export interface SynchraAppOptions {
   responseTimeout?: number;
@@ -116,6 +123,18 @@ export interface SynchraS3AssetPayload {
   base64: string | null;
   response_type: SynchraS3ResponseType;
   source_url: string;
+}
+
+export interface SynchraNavigationPayload {
+  screen?: string;
+  params?: Record<string, unknown>;
+  action?: SynchraNavigationAction;
+}
+
+export interface SynchraNavigationResponse {
+  success: boolean;
+  action: SynchraNavigationAction;
+  screen: string | null;
 }
 
 export interface SynchraSnackbarPayload {
@@ -486,6 +505,13 @@ export class SynchraApp {
   getS3File(payload: SynchraS3AssetRequestPayload) {
     return this.requestPayload<SynchraS3AssetPayload>(
       "app.s3.file.get",
+      payload as unknown as SynchraBridgePayload
+    );
+  }
+
+  navigate(payload: SynchraNavigationPayload) {
+    return this.requestPayload<SynchraNavigationResponse>(
+      "app.navigation.open",
       payload as unknown as SynchraBridgePayload
     );
   }

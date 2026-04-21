@@ -399,6 +399,57 @@ console.log(file.local_uri);
 
 Для обоих S3-методов bucket снаружи не передается. Native-слой всегда берет его из `providerCardContext.bucketName` текущего провайдера.
 
+## Навигация по внутренним экранам
+
+Позволяет из гибридного приложения открывать внутренние экраны Synchra.
+
+```ts
+await synchra.navigate({
+  action: "navigate",
+  screen: "Tasks",
+});
+```
+
+С параметрами:
+
+```ts
+await synchra.navigate({
+  action: "navigate",
+  screen: "TaskCard",
+  params: {
+    number: "123",
+  },
+});
+```
+
+Поддерживаемые действия:
+
+- `navigate`
+- `push`
+- `replace`
+- `go_back`
+- `pop_to_top`
+
+Пример возврата назад:
+
+```ts
+await synchra.navigate({
+  action: "go_back",
+});
+```
+
+Возвращает:
+
+```ts
+{
+  success: boolean;
+  action: "navigate" | "push" | "replace" | "go_back" | "pop_to_top";
+  screen: string | null;
+}
+```
+
+Если указать неизвестный экран, native bridge вернет ошибку `screen not found`.
+
 ## Выбор даты
 
 Открывает native date picker для выбора одной даты.

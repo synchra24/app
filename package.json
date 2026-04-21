@@ -1,11 +1,15 @@
 {
   "name": "@synchra24/app",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "SDK for Synchra.24 hybrid applications running inside the Synchra mobile WebView.",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/synchra24/app"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -30,7 +34,7 @@
     "sdk"
   ],
   "author": "Synchra.24",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "devDependencies": {
     "typescript": "^5.8.3"
   }
