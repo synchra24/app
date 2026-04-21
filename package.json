@@ -1,0 +1,37 @@
+{
+  "name": "@synchra24/app",
+  "version": "0.1.0",
+  "description": "SDK for Synchra.24 hybrid applications running inside the Synchra mobile WebView.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "prepack": "npm run clean && npm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "synchra24",
+    "synchra",
+    "hybrid",
+    "webview",
+    "sdk"
+  ],
+  "author": "Synchra.24",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
