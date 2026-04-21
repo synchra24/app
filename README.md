@@ -297,7 +297,7 @@ const photo = await synchra.pickPhoto({
 
 ## Выбор файла
 
-Открывает native file picker. По умолчанию файл загружается в хранилище Synchra и также возвращается в `base64`.
+Открывает native file picker. Файл всегда копируется в локальный cache приложения и возвращается как `local_uri`. При необходимости он дополнительно загружается в хранилище Synchra.
 
 ```ts
 const file = await synchra.pickFile({
@@ -306,12 +306,12 @@ const file = await synchra.pickFile({
 
 console.log(file.file);
 console.log(file.bucket);
-console.log(file.base64);
+console.log(file.local_uri);
 console.log(file.name);
 console.log(file.size);
 ```
 
-Если нужен только локальный `base64`, загрузку можно отключить:
+Если нужен только локальный файл без загрузки в Synchra, загрузку можно отключить:
 
 ```ts
 const file = await synchra.pickFile({
@@ -325,7 +325,7 @@ const file = await synchra.pickFile({
 {
   file: string | null;
   bucket: string | null;
-  base64: string;
+  local_uri: string;
   name: string;
   type: string;
   size: number;

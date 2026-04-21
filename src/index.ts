@@ -88,7 +88,12 @@ export interface SynchraPickedPhotoPayload {
   type: string;
 }
 
-export interface SynchraPickedFilePayload extends SynchraPickedPhotoPayload {
+export interface SynchraPickedFilePayload {
+  file: string | null;
+  bucket: string | null;
+  local_uri: string;
+  name: string;
+  type: string;
   size: number;
 }
 
