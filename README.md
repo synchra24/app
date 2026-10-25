@@ -1,645 +1,286 @@
 # @synchra24/app
 
-TypeScript SDK для гибридных приложений, которые открываются внутри мобильного приложения Synchra.24 через WebView.
+TypeScript SDK для сервисов Synchra.24: внешних приложений, встроенного кода и виджетов в веб-версии и мобильном WebView. Версия пакета — **1.0.1**.
 
-Пакет оборачивает native bridge Synchra и предоставляет Promise-based API для вызова возможностей приложения: запросы к разрешенным API, контекст провайдера, тема, геопозиция, выбор файлов и медиа, получение файлов из S3, QR-сканер, выбор пользователей, календарь, выбор времени, snackbar и модальное окно подтверждения.
+SDK предоставляет методы контекста компании и виджета, темы, переменных сервиса, артефактов и событий. Камера, геолокация, выбор файлов и нативные диалоги доступны через поддерживающее их мобильное приложение.
 
-## Установка
+Версия библиотеки и версия приложения Synchra24 обновляются отдельно. Установка нового пакета не добавляет отсутствующие возможности серверу или мобильному приложению. Встроенный редактор использует свою поставляемую с веб-движком копию SDK.
+
+## Установка и подключение
+
+После публикации версии:
 
 ```bash
-npm install @synchra24/app
+npm install @synchra24/app@1.0.1
 ```
+
+Для внешней страницы внутри мобильного приложения:
 
 ```ts
 import { SynchraApp } from "@synchra24/app";
 
-const synchra = new SynchraApp("SERVICE_TOKEN");
+const synchra = new SynchraApp("SERVICE_TOKEN", {
+  responseTimeout: 60_000,
+});
 ```
 
-`SERVICE_TOKEN` - токен внутреннего сервиса, созданный в Synchra.24. Native-приложение проверяет этот токен при каждом bridge-вызове.
+`SERVICE_TOKEN` — ключ конкретного сервиса, созданного в Synchra24. Подставляйте его из настроек своего приложения. Не используйте вместо него токены входа пользователя или компании, не передавайте ключ в адресе страницы и не выводите в логи.
+
+Для внешней страницы, встроенной в **веб-версию**, задайте точный доверенный origin родительского приложения:
+
+```ts
+const synchra = new SynchraApp("SERVICE_TOKEN", {
+  hostOrigin: "https://app.synchra24.com",
+});
+```
+
+`hostOrigin` содержит протокол и домен, при необходимости порт, без пути и завершающего `/`. Например, для локальной проверки — `http://localhost:3000`. SDK отправляет сообщения только этому origin и принимает ответы только от него и родительского окна. Не берите origin из непроверенных параметров страницы; `*` не поддерживается. Эта опция выбирает веб-транспорт: в мобильном WebView создавайте клиент без неё.
+
+Сайт должен разрешать встраивание. В отдельной вкладке веб-мост недоступен. Параметр `responseTimeout` задаёт ожидание ответа в миллисекундах; по умолчанию — 60 секунд.
+
+Во **встроенном редакторе и встроенном виджете** используйте готовый `synchra`, созданный движком. Создавать второй клиент и устанавливать npm-пакет в исходники редактора не требуется.
 
 ## Быстрый старт
 
+Пример — тело асинхронной функции запуска внешнего приложения:
+
 ```ts
-const synchra = new SynchraApp("SERVICE_TOKEN");
-
-const integrated = await synchra.isSynchraIntegrated();
-
-if (!integrated) {
-  console.log("Приложение открыто не внутри Synchra.24 или токен невалиден.");
+if (!(await synchra.isSynchraIntegrated())) {
+  // Покажите сообщение о недоступной интеграции; действия оставьте выключенными.
+  return;
 }
 
 const provider = await synchra.getProviderContext();
-const theme = synchra.getSynchraTheme();
-
-await synchra.showSnackbar({
-  message: `Provider ID: ${provider.provider_id}`,
-  type: "success",
-});
-
-console.log(theme?.active);
-console.log(theme?.current.controlPrimary);
-```
-
-## Создание клиента
-
-```ts
-const synchra = new SynchraApp(token, {
-  responseTimeout: 60000,
-});
-```
-
-Параметры:
-
-- `responseTimeout` - таймаут ожидания ответа от native bridge в миллисекундах. По умолчанию `60000`.
-
-Когда экземпляр больше не нужен, можно снять listeners и отклонить ожидающие запросы:
-
-```ts
-synchra.destroy();
-```
-
-## Ошибки
-
-Большинство методов возвращают `Promise`. Если native-приложение вернуло ошибку, Promise будет отклонен через `Error(message)`.
-
-```ts
-try {
-  const position = await synchra.getGeoPosition();
-} catch (error) {
-  console.error(error);
-}
-```
-
-Метод `isSynchraIntegrated()` специально сделан безопасным: он возвращает `false`, если bridge недоступен или токен не прошел проверку.
-
-## Проверка интеграции
-
-Проверяет, что приложение открыто внутри Synchra.24 и service token валиден.
-
-```ts
-const integrated = await synchra.isSynchraIntegrated();
-```
-
-Возвращает:
-
-```ts
-boolean;
-```
-
-## Тема приложения
-
-Synchra прокидывает цветовую тему напрямую в WebView, поэтому чтение темы не требует bridge-запроса.
-
-```ts
-const theme = synchra.getSynchraTheme();
-```
-
-Возвращает:
-
-```ts
-{
-    active: 'light' | 'dark';
-    current: Record<string, string>;
-    themes: {
-        light: Record<string, string>;
-        dark: Record<string, string>;
-    };
-} | null
-```
-
-Подписка на изменение темы:
-
-```ts
-const unsubscribe = synchra.onSynchraThemeChange((theme) => {
-  document.body.style.background = theme.current.primary;
-});
-
-unsubscribe();
-```
-
-Также доступен legacy bridge активной темы:
-
-```ts
-const activeTheme = await synchra.getThemeState();
-
-const unsubscribeAppearance = synchra.onThemeAppearance((theme) => {
-  console.log(theme);
-});
-```
-
-## API-запросы
-
-Выполняет разрешенные Open API запросы через native-приложение Synchra.
-
-```ts
-const response = await synchra.requestApi<{ parameters: { name: string } }>({
-  method: "GET",
-  path: "providers/parameters",
-  query: {
-    key: "value",
-  },
-});
-
-console.log(response.result.parameters.name);
-```
-
-Payload:
-
-```ts
-{
-    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-    path: string;
-    body?: Record<string, unknown>;
-    query?: Record<string, unknown>;
-    apiVersion?: number;
-    form?: Record<string, unknown> | { name: string; value: unknown }[];
-}
-```
-
-`apiVersion` позволяет вызывать не только `/api/v1`, но и другие версии API. Если передать `apiVersion: 2`, запрос уйдет на `/api/v2/...`.
-
-`form` нужен для multipart/form-data запросов. Поскольку bridge сериализуется через `postMessage`, в `form` нужно передавать обычный JSON-совместимый объект или массив полей, а native-слой сам соберет `FormData`.
-
-Пример multipart-запроса:
-
-```ts
-await synchra.requestApi({
-  method: "POST",
-  path: "reports/create",
-  apiVersion: 1,
-  form: {
-    title: "Отчет",
-    published: true,
-    tags: ["daily", "shift"],
-  },
-});
-```
-
-## Контекст провайдера
-
-Возвращает текущий контекст провайдера Synchra без provider token.
-
-```ts
-const provider = await synchra.getProviderContext();
-
 console.log(provider.provider_id);
-console.log(provider.profile_id);
-console.log(provider.role.permissions);
-console.log(provider.bucketName);
+
+await synchra.loadVariables();
+const settings = synchra.getVariable<{ enabled: boolean }>("settings");
+console.log(settings?.enabled);
 ```
 
-Provider token этим методом не возвращается.
+Сначала создайте определение `settings` в настройках сервиса. Набор методов и права проверяет принимающее приложение, а не установленный пакет.
 
-## Выбор пользователей
-
-Открывает native-виджет выбора пользователей.
+## Среда выполнения и доступность
 
 ```ts
-const result = await synchra.selectUsers({
-  users: [25],
-  all_users: true,
-});
-
-console.log(result.users);
+const runtime = synchra.getRuntime(); // 'web' | 'mobile', синхронно
+const integrated = await synchra.isSynchraIntegrated();
 ```
 
-Payload:
+`getRuntime()` определяет среду и не проверяет авторизацию. Проверка интеграции безопасно возвращает `false` при недоступном мосте, отклонённом ключе или таймауте. Не определяйте среду самостоятельно по наличию `ReactNativeWebView`: веб-движок использует совместимый транспорт.
 
-```ts
-{
-    users?: number[];
-    all_users?: boolean;
-}
-```
+| Возможность                                        | Веб                                      | Мобильное приложение                                |
+| -------------------------------------------------- | ---------------------------------------- | --------------------------------------------------- |
+| Контекст компании, тема                            | Да                                       | Да                                                  |
+| Переменные, чтение/обновление артефактов           | При поддержке сервером и наличии доступа | При поддержке мобильным мостом и сервером           |
+| Контекст виджета                                   | Встроенные виджеты                       | Виджеты с поддержкой контекста                      |
+| Отправка события сервиса                           | При поддержке сервером                   | Пока недоступна                                     |
+| Камера, геопозиция, выбор файлов, нативные диалоги | Возвращают признак недоступности         | При поддержке приложением и разрешении пользователя |
+| Произвольные запросы к API                         | Не разрешаются автоматически             | Только разрешённые мостом Open API операции         |
 
-Возвращает:
-
-```ts
-{
-    users: number[];
-}
-```
-
-## Геопозиция
-
-Запрашивает текущую геопозицию пользователя через native-приложение.
-
-```ts
-const position = await synchra.getGeoPosition();
-
-console.log(position.latitude, position.longitude);
-```
-
-Возвращает:
-
-```ts
-{
-  latitude: number;
-  longitude: number;
-  altitude: number | null;
-  accuracy: number | null;
-  altitude_accuracy: number | null;
-  heading: number | null;
-  speed: number | null;
-  timestamp: number;
-}
-```
-
-## Фото с камеры
-
-Открывает native-камеру и возвращает фото. По умолчанию файл загружается в хранилище Synchra, а в ответе приходят `file`, `bucket` и `base64`.
-
-```ts
-const photo = await synchra.takePhoto({
-  use_front_camera: false,
-  upload: true,
-});
-
-console.log(photo.file);
-console.log(photo.bucket);
-console.log(photo.base64);
-```
-
-Если нужен только `base64`, загрузку можно отключить:
-
-```ts
-const photo = await synchra.takePhoto({
-  upload: false,
-});
-
-console.log(photo.file); // null
-console.log(photo.bucket); // null
-console.log(photo.base64);
-```
-
-Возвращает:
-
-```ts
-{
-  file: string | null;
-  bucket: string | null;
-  base64: string;
-  name: string;
-  type: string;
-}
-```
-
-## Фото из галереи
-
-Открывает native-выбор фото из галереи. Формат ответа такой же, как у `takePhoto()`.
-
-```ts
-const photo = await synchra.pickPhoto({
-  upload: false,
-});
-```
-
-## Выбор файла
-
-Открывает native file picker. Файл всегда копируется в локальный cache приложения и возвращается как `local_uri`. При необходимости он дополнительно загружается в хранилище Synchra.
-
-```ts
-const file = await synchra.pickFile({
-  upload: true,
-});
-
-console.log(file.file);
-console.log(file.bucket);
-console.log(file.local_uri);
-console.log(file.name);
-console.log(file.size);
-```
-
-Если нужен только локальный файл без загрузки в Synchra, загрузку можно отключить:
-
-```ts
-const file = await synchra.pickFile({
-  upload: false,
-});
-```
-
-Возвращает:
-
-```ts
-{
-  file: string | null;
-  bucket: string | null;
-  local_uri: string;
-  name: string;
-  type: string;
-  size: number;
-}
-```
-
-## QR-сканер
-
-Открывает native QR-сканер.
+В вебе нативные методы возвращают объект `{ runtime: 'web', supported: false, ignored: true }`. Это не успешное получение фотографии, файла или координат. Тип `SynchraNativeResult<T>` отражает оба варианта:
 
 ```ts
 const qr = await synchra.scanQr();
-
-console.log(qr.value);
-console.log(qr.type);
+if ("ignored" in qr) {
+  // Покажите собственный веб-интерфейс или сообщение о недоступности.
+} else {
+  console.log(qr.value);
+}
 ```
 
-Возвращает:
+## Переменные сервиса
+
+Определения создаются администратором для конкретного сервиса одной компании. Доступны типы `string`, `number`, `boolean`, `json`. SDK не создаёт определения и не меняет их тип.
+
+Во внешнем приложении перед синхронным чтением выполните **один** `await synchra.loadVariables()`. Движок встроенного сервиса предварительно загружает данные своего готового экземпляра самостоятельно.
+
+```ts
+await synchra.loadVariables();
+const settings = synchra.getVariable<{ enabled: boolean }>("settings");
+const info = synchra.getVariableInfo<{ enabled: boolean }>("settings");
+
+try {
+  const updated = await synchra.setVariable(
+    "settings",
+    { enabled: true },
+    {
+      revision: info.revision,
+    },
+  );
+  console.log(updated.revision);
+} catch (error) {
+  // Покажите ошибку; после конфликта обновите данные повторным открытием сервиса.
+}
+```
+
+- `getVariable<T>(name)` возвращает `T | undefined` сразу, без запроса. Незаданное значение — `undefined`; заданный JSON `null` — `null`.
+- `getVariableInfo<T>(name)` возвращает копию записи: `name`, `description`, `type`, `value`, `is_set`, `revision`, `updated_at`.
+- До загрузки или для неизвестного имени синхронные методы выбрасывают ошибку.
+- `setVariable()` возвращает Promise с обновлённой записью и меняет локальный снимок только после успешного ответа. Необязательная `revision` защищает от перезаписи чужого изменения; конфликт возвращается с кодом 409.
+- Объекты возвращаются копиями; редактирование объекта само по себе ничего не сохраняет. Кеши разных клиентов независимы. Запоздавший ответ с меньшей ревизией не заменяет новое значение.
+- Повторный `loadVariables()` использует загруженный снимок. После ошибки загрузку можно повторить. Изменения из других экземпляров видны при повторном открытии сервиса или создании нового клиента и загрузке его снимка.
+- Имя: буква латиницей в начале, далее буквы, цифры, `_`, `.` или `-`, всего до 64 символов. Значение — JSON до 64 КиБ в UTF-8. До 100 определений на сервис.
+
+Значения доступны коду сервиса и сотрудникам с доступом к нему. Не храните здесь секреты, которые нельзя раскрывать этим сотрудникам. Предпросмотр использует тестовые данные; запись в нём не меняет компанию. В магазин передаются определения без значений.
+
+## Артефакты автоматизаций
+
+```ts
+const artifact = await synchra.getArtifact<{ enabled: boolean }>(
+  "service.settings",
+);
+console.log(artifact.value, artifact.version);
+
+const updated = await synchra.setArtifact("service.settings", {
+  enabled: true,
+});
+console.log(updated.version);
+```
+
+Оба метода возвращают `SynchraArtifact<T>`: `name`, `value`, `version`, `size_bytes`, `created_at`, `updated_at`.
+
+`setArtifact()` заменяет JSON целиком и **обновляет только существующий артефакт**. Он не создаёт отсутствующее имя и сам по себе не запускает автоматизацию. Нужны доступ пользователя, возможность API-интеграции в подписке и право управления интеграциями. Если поддержка ещё отсутствует на сервере или в мобильном приложении, вызов завершится ошибкой.
+
+Имя начинается с латинской буквы и содержит до 128 символов: буквы, цифры, `_`, `.` или `-`. Максимум значения — 1 МиБ JSON в UTF-8. В предпросмотре доступны только добавленные тестовые артефакты; изменения исчезают после его перезапуска.
+
+## События сервиса
+
+Администратор заранее регистрирует и включает событие в настройках сервиса, затем связывает с ним автоматизацию. SDK вызывает существующее событие, не создавая определение или автоматизацию.
+
+```ts
+const requestKey = crypto.randomUUID(); // сохраните для повторов этой операции
+const result = await synchra.emitEvent(
+  "report_ready",
+  { report_id: "125" },
+  { requestKey },
+);
+
+if ("preview" in result) {
+  // Предпросмотр: accepted === false, автоматизация не запущена.
+} else {
+  console.log(result.event_id, result.duplicate);
+  // Подтверждение приёма в очередь, а не успешного завершения автоматизации.
+}
+```
+
+Передавайте **локальное имя** `report_ready`, а не полный код `custom.service_ID.report_ready`. Допустимы строчные латинские буквы, цифры и `_`, первая — буква; всего до 64 символов. Данные — JSON-объект до 32 КиБ.
+
+`requestKey` — 16–128 латинских букв, цифр, `_` или `-`. Для одного действия повторяйте прежние ключ и данные: одинаковый запрос не создаёт повторного события, другие данные с прежним ключом дают 409. Ключ сохраняется не менее 24 часов. Без явного ключа SDK создаёт новый для каждого вызова.
+
+Отключайте кнопку на время отправки и обрабатывайте ошибки доступа, 409, 429 и временную недоступность. Не запускайте событие при каждом рендере. Сейчас метод поддержан только веб-мостом; на мобильном устройстве SDK сразу возвращает ошибку без отправки запроса. Предпросмотр возвращает `{ preview: true, accepted: false, message }`.
+
+## Контекст виджета
+
+```ts
+const context = await synchra.getWidgetContext();
+console.log(context?.placement, context?.entity.id);
+
+const unsubscribe = synchra.onWidgetContextChange((next) => {
+  console.log(next?.data);
+});
+// При размонтировании:
+unsubscribe();
+```
+
+В обычном сервисе с поддержкой этого метода результат — `null`. В виджете — `SynchraWidgetContext<T>`:
 
 ```ts
 {
-    value: string;
-    type?: string;
+  version: 1,
+  placement: 'task',
+  provider_id: '108',
+  entity: { type: 'task', id: '42' },
+  data: { title: 'Проверить оборудование', status: 'in_progress' },
 }
 ```
 
-## Получение изображения из S3
+Размещения: `dashboard`, `task`, `incident`, `document`, `field_visit`, `visit`, `journal`, `report`, `control_employee`, `control`. ID компании и записи в оболочке — строки. Для сотрудника `entity.type` равен `employee`. Поля `data` зависят от карточки и платформы; проверяйте их наличие. Контекст не заменяет серверную проверку доступа и не содержит ключей авторизации.
 
-Получает файл из S3 через native-приложение. По умолчанию возвращает локальный путь `local_uri`, потому что это заметно легче для bridge и лучше подходит для больших изображений.
+Веб-сервис по внешней ссылке не получает контекст карточки автоматически. Доступность контекста зависит от поддерживающего его места запуска; отсутствующий метод хоста может вернуть ошибку. Подписка уведомляет о следующих изменениях, первоначальные данные читайте отдельно.
+
+## Тема
 
 ```ts
-const image = await synchra.getS3Image({
-  file: "avatar.jpg",
+const theme = synchra.getSynchraTheme(); // { active, current, themes } | null
+const unsubscribe = synchra.onSynchraThemeChange((next) => {
+  document.body.style.backgroundColor = next.current.primary;
+  document.body.style.color = next.current.text;
 });
-
-console.log(image.local_uri);
+unsubscribe();
 ```
 
-Если нужен именно `base64`, можно явно запросить его:
+`active` — `light` или `dark`, `current` — актуальные цвета текущей платформы, `themes` — базовые палитры. Общие ключи: `primary`, `secondary`, `text`, `title`, `elements`, `inputGrey`, `border`, `controlPrimary`, `error`, `success`, `button`, `buttonText`, `white`. Не фиксируйте мобильные цвета в веб-интерфейсе. Веб-клиент получает тему от проверенного родительского окна; до первого сообщения метод возвращает `null`. Чтение возвращает копию.
+
+Для совместимости сохранены `await getThemeState()` и `onThemeAppearance(callback)`. Подписка на полную палитру предпочтительна для обновления оформления без перезагрузки.
+
+## Контекст компании и Open API
+
+`await getProviderContext()` возвращает контекст текущей компании без её токена авторизации. Набор полей зависит от платформы: в вебе доступен сокращённый контекст с `provider_id`, `profile_id` и `role.permissions`. `provider_id` может быть строкой или числом. Проверяйте необязательные для вашей платформы данные.
+
+`requestApi<T>(payload)` сохраняет формат ответа `{ code?, result, message?, status? }`. Используйте только разрешённые публичные Open API операции из документации Synchra24. SDK не даёт доступа к служебным маршрутам приложения и не обходит права или подписку.
+
+Payload: `method` (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`), `path`; необязательные `body`, `query`, `apiVersion`, `form`. `form` — JSON-совместимый объект или массив `{ name, value }`; бинарные объекты через JSON-мост напрямую не передаются. Веб-хост не разрешает произвольные `requestApi()` автоматически; готовые методы переменных и артефактов используйте напрямую.
+
+## Мобильные возможности
+
+Все методы ниже возвращают Promise. В вебе вместо мобильного результата приходит `SynchraUnsupportedWebCall`; проверяйте `ignored`, как в примере QR выше. Отмена и необходимость разрешений обрабатываются принимающим приложением.
+
+| Метод                                        | Параметры                                                          | Успешный мобильный результат                                                                          |
+| -------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `getGeoPosition()`                           | —                                                                  | `latitude`, `longitude`, `altitude`, `accuracy`, `altitude_accuracy`, `heading`, `speed`, `timestamp` |
+| `takePhoto(options?)`                        | `use_front_camera?`, `upload?` (по умолчанию `true`)               | `file`, `bucket`, `base64`, `name`, `type`                                                            |
+| `pickPhoto(options?)`                        | `upload?`                                                          | Как у `takePhoto()`                                                                                   |
+| `pickFile(options?)`                         | `upload?`                                                          | `file`, `bucket`, `local_uri`, `name`, `type`, `size`                                                 |
+| `scanQr()`                                   | —                                                                  | `value`, необязательный `type`                                                                        |
+| `selectUsers(options?)`                      | `users?: number[]`, `all_users?: boolean`                          | `{ users: number[] }`                                                                                 |
+| `selectDate(options?)`                       | `date?: string` (`YYYY-MM-DD`)                                     | `{ date: string \| null }`                                                                            |
+| `selectDateRange(options?)`                  | `start_date?`, `end_date?`                                         | `{ start_date, end_date }`                                                                            |
+| `selectTime(options?)`                       | `time?: string` (`HH:mm`) или `hours?`, `minutes?`                 | `{ time, hours, minutes }`                                                                            |
+| `getS3Image(options)` / `getS3File(options)` | `file`, `response_type?: 'local_uri' \| 'base64'`                  | `file`, `local_uri`, `base64`, `response_type`, `source_url`                                          |
+| `navigate(options)`                          | `action?`, `screen?`, `params?`                                    | `{ success, action, screen }`                                                                         |
+| `showSnackbar(options)`                      | `message`, `type?`, `timeout?`                                     | `{ shown: boolean }`                                                                                  |
+| `openModal(options)`                         | `text`, `title?`, `primary_button_text?`, `secondary_button_text?` | `{ action: 'primary' \| 'secondary' \| 'dismiss' }`                                                   |
+
+Без загрузки фото `file` и `bucket` равны `null`; файл выбора сохраняет `local_uri`. Для S3 bucket выбирается текущей компанией; передавать его не нужно. По умолчанию S3 возвращает локальную ссылку, `base64` запрашивается явно.
+
+Навигация поддерживает `navigate`, `push`, `replace`, `go_back`, `pop_to_top`; имена экранов определяет приложение. Типы snackbar: `success`, `error`, `warn`, `empty`.
+
+## Ошибки и жизненный цикл
 
 ```ts
-const image = await synchra.getS3Image({
-  file: "avatar.jpg",
-  response_type: "base64",
-});
-```
+import { SynchraBridgeError } from "@synchra24/app";
 
-Возвращает:
-
-```ts
-{
-  file: string;
-  local_uri: string | null;
-  base64: string | null;
-  response_type: "local_uri" | "base64";
-  source_url: string;
-}
-```
-
-## Получение файла из S3
-
-Работает так же, как получение изображения, но предназначен для любых файлов.
-
-```ts
-const file = await synchra.getS3File({
-  file: "docs/report.pdf",
-});
-
-console.log(file.local_uri);
-```
-
-Для обоих S3-методов bucket снаружи не передается. Native-слой всегда берет его из `providerCardContext.bucketName` текущего провайдера.
-
-## Навигация по внутренним экранам
-
-Позволяет из гибридного приложения открывать внутренние экраны Synchra.
-
-```ts
-await synchra.navigate({
-  action: "navigate",
-  screen: "Tasks",
-});
-```
-
-С параметрами:
-
-```ts
-await synchra.navigate({
-  action: "navigate",
-  screen: "TaskCard",
-  params: {
-    number: "123",
-  },
-});
-```
-
-Поддерживаемые действия:
-
-- `navigate`
-- `push`
-- `replace`
-- `go_back`
-- `pop_to_top`
-
-Пример возврата назад:
-
-```ts
-await synchra.navigate({
-  action: "go_back",
-});
-```
-
-Возвращает:
-
-```ts
-{
-  success: boolean;
-  action: "navigate" | "push" | "replace" | "go_back" | "pop_to_top";
-  screen: string | null;
-}
-```
-
-Если указать неизвестный экран, native bridge вернет ошибку `screen not found`.
-
-## Выбор даты
-
-Открывает native date picker для выбора одной даты.
-
-```ts
-const result = await synchra.selectDate({
-  date: "2026-04-21",
-});
-
-console.log(result.date);
-```
-
-Возвращает:
-
-```ts
-{
-  date: string | null; // YYYY-MM-DD
-}
-```
-
-## Выбор диапазона дат
-
-Открывает native date range picker.
-
-```ts
-const range = await synchra.selectDateRange({
-  start_date: "2026-04-01",
-  end_date: "2026-04-21",
-});
-
-console.log(range.start_date, range.end_date);
-```
-
-Возвращает:
-
-```ts
-{
-  start_date: string | null;
-  end_date: string | null;
-}
-```
-
-## Выбор времени
-
-Открывает native time picker.
-
-```ts
-const time = await synchra.selectTime({
-  time: "09:30",
-});
-
-console.log(time.time);
-console.log(time.hours);
-console.log(time.minutes);
-```
-
-В payload можно передать либо `time`, либо `hours`/`minutes`.
-
-Возвращает:
-
-```ts
-{
-  time: string; // HH:mm
-  hours: number;
-  minutes: number;
-}
-```
-
-## Snackbar
-
-Показывает native snackbar Synchra.
-
-```ts
-await synchra.showSnackbar({
-  message: "Сохранено",
-  type: "success",
-  timeout: 4000,
-});
-```
-
-Доступные типы:
-
-- `success`
-- `error`
-- `warn`
-- `empty`
-
-Возвращает:
-
-```ts
-{
-  shown: boolean;
-}
-```
-
-## Модальное окно
-
-Открывает native-модальное окно Synchra с двумя кнопками.
-
-```ts
-const result = await synchra.openModal({
-  title: "Подтверждение",
-  text: "Продолжить действие?",
-  primary_button_text: "Продолжить",
-  secondary_button_text: "Отмена",
-});
-
-if (result.action === "primary") {
-  // Нажата первая кнопка
+try {
+  await synchra.setVariable("settings", { enabled: true }, { revision: 1 });
+} catch (error) {
+  if (error instanceof SynchraBridgeError && error.code === 409) {
+    // Предложите обновить данные перед повторной записью.
+  }
 }
 
-if (result.action === "secondary") {
-  // Нажата вторая кнопка
-}
-
-if (result.action === "dismiss") {
-  // Окно закрыто нажатием по фону
-}
+synchra.destroy();
 ```
 
-Возвращает:
+Методы запросов отклоняют Promise при недоступном мосте, таймауте, ошибке проверки или отказе хоста. Ошибки хоста сохраняют числовой `code` и необязательный `status`. Синхронные getters переменных выбрасывают исключение непосредственно.
 
-```ts
-{
-  action: "primary" | "secondary" | "dismiss";
-}
-```
+`destroy()` снимает подписки, очищает кеш и отклоняет ожидающие запросы. Отдельные клиенты не уничтожают обработчики друг друга. После уничтожения не отправляйте новые запросы; создайте новый экземпляр. При размонтировании внешнего приложения вызывайте `destroy()`, а для подписок готового встроенного `synchra` — только свои функции отписки.
 
 ## TypeScript
 
-Пакет поставляется с декларациями TypeScript. Можно импортировать типы payload и response:
+Декларации поставляются в пакете. Кроме прежних типов payload доступны `SynchraRuntime`, `SynchraNativeResult<T>`, `SynchraUnsupportedWebCall`, `SynchraServiceVariable<T>`, `SynchraArtifact<T>`, `SynchraWidgetContext<T>`, `SynchraWidgetPlacement`, `SynchraEventReceipt` и `SynchraBridgeError`.
 
-```ts
-import type {
-  SynchraProviderContext,
-  SynchraPickedFilePayload,
-  SynchraThemePayload,
-} from "@synchra24/app";
-```
+При обновлении старого клиента учитывайте объединённые типы результатов нативных методов: прежде чем читать `photo.file` или `qr.value`, исключите вариант с `ignored: true`.
 
-## Запуск вне Synchra
-
-Большинство bridge-методов требуют `window.ReactNativeWebView`. При вызове вне мобильного приложения Synchra они выбросят ошибку. Для безопасной runtime-проверки используйте `isSynchraIntegrated()`.
-
-```ts
-const integrated = await synchra.isSynchraIntegrated();
-
-if (!integrated) {
-  // Показать fallback UI для обычного браузера.
-}
-```
-
-## Разработка
-
-Установить зависимости:
+## Разработка и выпуск
 
 ```bash
-npm install
-```
-
-Проверить типы:
-
-```bash
+npm ci
 npm run typecheck
-```
-
-Собрать пакет:
-
-```bash
-npm run build
-```
-
-Проверить состав публикации:
-
-```bash
+npm test
 npm pack --dry-run
 ```
 
-В npm-пакет попадают только `dist`, `README.md` и `package.json`.
+Сборка создаёт ESM и декларации в `dist`. В пакет включаются `dist`, README, package.json и лицензионный файл. Перед выпуском проверьте поддержку методов в целевых версиях веб-хоста, мобильного приложения и сервера. Публикация SDK не разворачивает эти компоненты.
 
-## Публикация
-
-Перед публикацией нужно убедиться, что native-приложение Synchra поддерживает те же bridge-события, что и SDK.
-
-```bash
-npm publish
-```
-
-Для публичной публикации scoped-пакета:
-
-```bash
-npm publish --access public
-```
+Публикация подготовленной версии выполняется отдельно уполномоченным владельцем пакета: `npm publish --access public`.
