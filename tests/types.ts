@@ -48,3 +48,12 @@ async function useSdk() {
   return value;
 }
 void useSdk;
+
+async function selectCompanyEmployees() {
+  const result = await client.selectEmployeeProfiles({profile_ids:[501], all_users:true});
+  const legacy = await client.selectUsers({users:[42]});
+  if (!("ignored" in result)) { const ids: number[] = result.profile_ids; void ids; }
+  if (!("ignored" in legacy)) { const ids: number[] = legacy.users; void ids; }
+  return {result, legacy};
+}
+void selectCompanyEmployees;

@@ -7,6 +7,7 @@ export type SynchraBridgeEvent =
   | "app.gallery.photo"
   | "app.file.pick"
   | "app.users.select"
+  | "app.employee-profiles.select"
   | "app.calendar.date.select"
   | "app.calendar.range.select"
   | "app.time.select"
@@ -112,6 +113,16 @@ export interface SynchraNativeMessage<TPayload = unknown, TResponse = unknown> {
   request_id?: string | number;
   payload?: TPayload;
   response?: SynchraNativeResponse<TResponse>;
+}
+
+/** Company employee identity. An account may be absent; its number is never a profile fallback. */
+export interface SynchraEmployeeReference {
+  profile_id: number;
+  user_id: string | number | null;
+}
+export interface SynchraSelectEmployeeProfilesPayload {
+  profile_ids?: number[];
+  all_users?: boolean;
 }
 
 export interface SynchraSelectUsersPayload {
@@ -260,6 +271,7 @@ export interface SynchraProviderUserProfile {
 }
 
 export interface SynchraProviderContext {
+  capabilities?: { employee_profile_selection?: boolean };
   open?: boolean;
   provider_id: number | string;
   profile_id: number;
@@ -840,6 +852,20 @@ export class SynchraApp {
     return this.requestNativePayload<{ users: number[] }>("app.users.select", {
       users,
       all_users,
+    });
+  }
+
+  /** Select company profiles without changing the legacy selectUsers account contract. */
+  async selectEmployeeProfiles({ profile_ids = [], all_users = true }: SynchraSelectEmployeeProfilesPayload = {}) {
+    if (!Array.isArray(profile_ids) || profile_ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+      throw new Error("profile_ids must contain positive safe integers");
+    }
+    const context = await this.getProviderContext();
+    if (!context.capabilities?.employee_profile_selection) {
+      throw new Error("employee profile selection is not supported by this host");
+    }
+    return this.requestNativePayload<{ profile_ids: number[] }>("app.employee-profiles.select", {
+      profile_ids, all_users,
     });
   }
 

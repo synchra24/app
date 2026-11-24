@@ -478,3 +478,26 @@ test("synchronous variables preserve false, zero and empty string rather than tr
   assert.equal(api.getVariable("count"), 0);
   assert.equal(api.getVariable("label"), "");
 });
+
+test("profile picker keeps account and employee namespaces distinct", async () => {
+  const calls = [];
+  native((message, reply) => {
+    calls.push(message);
+    if (message.event === "app.provider.context") reply({ provider_id: "108", profile_id: 42, capabilities: { employee_profile_selection: true } });
+    else if (message.event === "app.employee-profiles.select") reply({ profile_ids: [701] });
+    else if (message.event === "app.users.select") reply({ users: [42] });
+  });
+  const app = client();
+  assert.deepEqual(await app.selectEmployeeProfiles({profile_ids:[701]}), {profile_ids:[701]});
+  assert.deepEqual(await app.selectUsers({users:[42]}), {users:[42]});
+  assert.deepEqual(calls[1].payload.profile_ids,[701]);
+  assert.equal(calls[1].payload.users,undefined);
+  await assert.rejects(app.selectEmployeeProfiles({profile_ids:[0]}), /positive safe integers/);
+});
+test("profile picker fails explicitly on an old host without falling back to accounts", async () => {
+  native((message, reply) => {
+    assert.equal(message.event,"app.provider.context");
+    reply({provider_id:"108",profile_id:42});
+  });
+  await assert.rejects(client().selectEmployeeProfiles(), /not supported/);
+});
